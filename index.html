@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100 overflow-hidden select-none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Business Times - Archive Stack</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            background-color: #020617;
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        /* Fast, fluid cubic-bezier transform transition for card sliding */
+        .stack-card {
+            transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease-out, box-shadow 0.3s ease, z-index 0.1s ease;
+            will-change: transform, opacity;
+            box-shadow: -10px 12px 28px rgba(0, 0, 0, 0.75), 0 0 1px rgba(255, 255, 255, 0.2);
+        }
+
+        .stack-card:hover {
+            box-shadow: -12px 16px 36px rgba(0, 0, 0, 0.9), 0 0 15px rgba(245, 158, 11, 0.35);
+        }
+
+        /* Highlighted elevated active card styling */
+        .stack-card.active-front {
+            box-shadow: 0 0 30px rgba(245, 158, 11, 0.6), -15px 20px 45px rgba(0, 0, 0, 0.95);
+        }
+    </style>
+</head>
+<body class="h-full w-full flex flex-col justify-start items-center relative">
+
+    <!-- Top Navigation Header -->
+    <header class="w-full px-6 py-4 flex items-center justify-between z-50 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/60">
+        <div class="flex items-center gap-3">
+            <h1 class="text-slate-100 font-bold text-lg sm:text-xl tracking-wider uppercase font-serif">
+                The Business Times
+            </h1>
+            <span class="text-slate-500 text-xs hidden sm:inline-block">|</span>
+            <span class="text-amber-400 text-xs tracking-widest font-medium uppercase hidden sm:inline-block">
+                1976 — 2026 Archive
+            </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <span id="statusLabel" class="text-xs text-slate-400 font-mono mr-2 hidden md:inline-block">Playing archive sequence...</span>
+            <button id="replayBtn" onclick="startFastAnimation()" class="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-md text-xs font-medium transition-all active:scale-95 cursor-pointer">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>Replay Animation</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Animation Stage Aligned to Top with Top Margin Guardrail -->
+    <main id="animationStage" class="relative w-full flex-1 flex flex-col justify-start items-center pt-20 sm:pt-28 md:pt-32 overflow-hidden cursor-default">
+        <!-- Inner Track for Dynamic Horizontal Stacking -->
+        <div id="stackTrack" class="relative w-full h-[45vh] sm:h-[52vh] max-h-[520px] flex items-center">
+            <!-- 12 Stacked Cards populated dynamically via JavaScript -->
+        </div>
+
+        <!-- Instructional Subtext -->
+        <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 text-center pointer-events-none">
+            <p class="text-slate-400 text-xs sm:text-sm tracking-wide font-medium bg-slate-900/80 px-4 py-2 rounded-full border border-slate-800/80 shadow-lg">
+                <i class="fa-solid fa-hand-pointer text-amber-400 mr-2"></i>Tap or click any front page to bring it to the top layer
+            </p>
+        </div>
+    </main>
+
+    <script>
+        // Archive Dataset of 12 Front Page Covers (1990 - 2026)
+        const ARCHIVE_DATA = [
+            { year: 1976, file: 'bt-1976.jpg' },
+            { year: 1990, file: 'bt-1990.jpg' },
+            { year: 1993, file: 'bt-1993.jpg' },
+            { year: 1995, file: 'bt-1995.jpg' },
+            { year: 1996, file: 'bt-1996-3.jpg' },
+            { year: 2000, file: 'bt-2000.jpg' },
+            { year: 2004, file: 'bt-2004.jpg' },
+            { year: 2007, file: 'bt-2007.jpg' },
+            { year: 2010, file: 'bt-2010.jpg' },
+            { year: 2012, file: 'bt-2012.jpg' },
+            { year: 2015, file: 'bt-2015.jpg' },
+            { year: 2020, file: 'bt-2022.jpg' },
+            { year: 2026, file: 'bt-2026.jpg' }
+        ];
+
+        // Counter-clockwise rotation angle (-25 degrees)
+        const ROTATION_ANGLE = -25;
+        // Animation interval speed (ms per cover)
+        const FAST_ANIMATION_SPEED = 240; 
+
+        let activeIndex = -1;
+        let animationTimer = null;
+        let topElevatedCardIndex = -1;
+        let highestZIndex = 100;
+
+        const stackTrack = document.getElementById('stackTrack');
+        const statusLabel = document.getElementById('statusLabel');
+
+        /**
+         * STREAMING_CHUNK:Defining SVG fallback generator for offline testing...
+         */
+        function createSvgFallbackUrl(year) {
+            const svg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="600" height="840" viewBox="0 0 600 840" style="background:#0f172a; font-family:serif;">
+                <rect width="600" height="840" fill="#0f172a"/>
+                <rect x="20" y="20" width="560" height="800" fill="#f8fafc" rx="4"/>
+                <path d="M 30 90 L 570 90 M 30 100 L 570 100 M 30 180 L 570 180" stroke="#1e293b" stroke-width="2"/>
+                <text x="300" y="60" text-anchor="middle" font-size="28" font-weight="bold" fill="#090d16">THE BUSINESS TIMES</text>
+                <text x="300" y="80" text-anchor="middle" font-size="14" fill="#475569">SINGAPORE EDITION • ${year}</text>
+                <rect x="40" y="210" width="520" height="520" fill="#cbd5e1" rx="2"/>
+                <text x="300" y="470" text-anchor="middle" font-size="22" font-weight="bold" fill="#334155">[ Front Page Archive — ${year} ]</text>
+                <text x="300" y="780" text-anchor="middle" font-size="12" fill="#64748b">Archival Record Copy</text>
+            </svg>`;
+            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+        }
+
+        /**
+         * STREAMING_CHUNK:Constructing card DOM elements with click-to-bring-to-front logic...
+         */
+        function createCards() {
+            stackTrack.innerHTML = '';
+            ARCHIVE_DATA.forEach((item, index) => {
+                const card = document.createElement('div');
+                card.id = `stack-card-${index}`;
+                // Card aspect ratio matching front page newspapers (~3:4.2)
+                card.className = 'stack-card absolute h-full aspect-[1/1.4] bg-slate-900 border border-slate-700/80 rounded-sm cursor-pointer origin-center select-none';
+                
+                const img = document.createElement('img');
+                img.src = item.file;
+                img.alt = `Business Times ${item.year}`;
+                img.className = 'w-full h-full object-cover rounded-sm pointer-events-none';
+                img.onerror = function() {
+                    this.onerror = null;
+                    this.src = createSvgFallbackUrl(item.year);
+                };
+
+                // Year Label Badge
+                const badge = document.createElement('div');
+                badge.className = 'absolute top-2 left-2 bg-slate-950/90 text-amber-400 font-bold font-serif text-xs px-2.5 py-1 rounded border border-amber-500/30 shadow-md pointer-events-none';
+                badge.innerText = item.year;
+
+                card.appendChild(img);
+                card.appendChild(badge);
+
+                // Click or Tap event: Bring clicked card to top layer
+                card.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    bringCardToTop(index);
+                });
+
+                stackTrack.appendChild(card);
+            });
+        }
+
+        /**
+         * STREAMING_CHUNK:Elevating clicked card z-index and scaling...
+         */
+        function bringCardToTop(index) {
+            if (index > activeIndex) return; // Ignore cards that haven't slid in yet
+
+            topElevatedCardIndex = index;
+            highestZIndex++;
+
+            ARCHIVE_DATA.forEach((_, i) => {
+                const card = document.getElementById(`stack-card-${i}`);
+                if (!card) return;
+
+                if (i === index) {
+                    card.style.zIndex = highestZIndex;
+                    card.classList.add('active-front');
+                } else {
+                    card.classList.remove('active-front');
+                }
+            });
+
+            renderStackLayout();
+        }
+
+        /**
+         * STREAMING_CHUNK:Calculating dynamic positions across viewport width...
+         */
+        function renderStackLayout() {
+            const trackHeight = stackTrack.clientHeight || 400;
+            const cardWidth = trackHeight * (1 / 1.4);
+            const containerWidth = window.innerWidth;
+            const totalCards = ARCHIVE_DATA.length;
+
+            // Spacing calculations to spread all 12 cards edge-to-edge across the screen
+            const startX = 16; // Left padding offset
+            const availableWidth = containerWidth - cardWidth - 32; 
+            const stepOffset = totalCards > 1 ? availableWidth / (totalCards - 1) : 0;
+
+            const offscreenRightX = containerWidth + 400; // Offscreen right entry point
+
+            ARCHIVE_DATA.forEach((_, i) => {
+                const card = document.getElementById(`stack-card-${i}`);
+                if (!card) return;
+
+                // Set default chronological z-index unless overridden by click
+                if (topElevatedCardIndex !== i && parseInt(card.style.zIndex || '0') < 100) {
+                    card.style.zIndex = i + 1;
+                }
+
+                if (i <= activeIndex) {
+                    // Card has entered stage: calculate position across full width + apply -25deg rotation
+                    const xPos = startX + (i * stepOffset);
+                    const isElevated = (i === topElevatedCardIndex);
+                    const scaleFactor = isElevated ? 1.06 : 1;
+
+                    card.style.transform = `translateX(${xPos}px) rotate(${ROTATION_ANGLE}deg) scale(${scaleFactor})`;
+                    card.style.opacity = '1';
+                } else {
+                    // Card waiting offscreen right
+                    card.style.transform = `translateX(${offscreenRightX}px) rotate(0deg) scale(0.85)`;
+                    card.style.opacity = '0';
+                }
+            });
+        }
+
+        /**
+         * STREAMING_CHUNK:Managing automated playback sequence loop...
+         */
+        function startFastAnimation() {
+            if (animationTimer) clearInterval(animationTimer);
+            
+            activeIndex = -1;
+            topElevatedCardIndex = -1;
+            highestZIndex = 100;
+
+            // Reset class states
+            ARCHIVE_DATA.forEach((_, i) => {
+                const card = document.getElementById(`stack-card-${i}`);
+                if (card) {
+                    card.classList.remove('active-front');
+                    card.style.zIndex = i + 1;
+                }
+            });
+
+            if (statusLabel) statusLabel.innerText = "Playing archive sequence...";
+            renderStackLayout();
+
+            animationTimer = setInterval(() => {
+                if (activeIndex < ARCHIVE_DATA.length - 1) {
+                    activeIndex++;
+                    renderStackLayout();
+                } else {
+                    // Stop automatically when the newest cover (2026) arrives
+                    clearInterval(animationTimer);
+                    if (statusLabel) statusLabel.innerText = "Archive sequence complete";
+                }
+            }, FAST_ANIMATION_SPEED);
+        }
+
+        // Replay on Spacebar or Enter
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.key === 'Enter') {
+                startFastAnimation();
+            }
+        });
+
+        // Recalculate positions on window resize
+        window.addEventListener('resize', () => {
+            renderStackLayout();
+        });
+
+        // Initialize animation on load
+        window.addEventListener('load', () => {
+            createCards();
+            renderStackLayout();
+            setTimeout(startFastAnimation, 250);
+        });
+    </script>
+</body>
+</html>
